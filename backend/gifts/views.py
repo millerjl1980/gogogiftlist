@@ -1,12 +1,20 @@
 import json
 from functools import wraps
+from urllib.parse import urlencode
 
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.conf import settings
 from django.db import IntegrityError
+from django.core.mail import send_mail
+from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
+from django.utils.encoding import force_str
 from django.utils.dateparse import parse_date
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .models import Gift, GiftAssignment, GiftGiver, GiftList, GiftReceiver
@@ -95,6 +103,47 @@ def login_view(request):
         return error("Email or password is incorrect.", 401)
     login(request, user)
     return JsonResponse({"user": {"id": user.id, "name": user.get_full_name() or user.username, "email": user.email}})
+
+
+@require_http_methods(["POST"])
+def password_reset(request):
+    """Send a reset link without revealing whether the email has an account."""
+    email = payload(request).get("email", "").strip().lower()
+    user = User.objects.filter(email__iexact=email, is_active=True).first()
+    if user:
+        uid = urlsafe_base64_encode(str(user.pk).encode())
+        token = default_token_generator.make_token(user)
+        reset_url = f"{settings.FRONTEND_URL}/?{urlencode({'reset_uid': uid, 'reset_token': token})}"
+        send_mail(
+            "Reset your GoGoGiftList password",
+            "We received a request to reset your GoGoGiftList password.\n\n"
+            f"Choose a new password: {reset_url}\n\n"
+            "If you did not request this, you can safely ignore this email.",
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=False,
+        )
+    return JsonResponse({"detail": "If an account exists for that email, a reset link has been sent."})
+
+
+@require_http_methods(["POST"])
+def password_reset_confirm(request):
+    data = payload(request)
+    try:
+        user_id = force_str(urlsafe_base64_decode(data.get("uid", "")))
+        user = User.objects.get(pk=user_id, is_active=True)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        return error("This password-reset link is invalid or has expired.")
+    if not default_token_generator.check_token(user, data.get("token", "")):
+        return error("This password-reset link is invalid or has expired.")
+    password = data.get("password", "")
+    try:
+        validate_password(password, user)
+    except ValidationError as exc:
+        return error(" ".join(exc.messages))
+    user.set_password(password)
+    user.save(update_fields=["password"])
+    return JsonResponse({"detail": "Your password has been reset. You can now sign in."})
 
 
 @require_http_methods(["POST"])

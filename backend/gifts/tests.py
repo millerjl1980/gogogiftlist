@@ -1,6 +1,9 @@
 import json
+from urllib.parse import parse_qs, urlparse
 
-from django.test import Client, TestCase
+from django.contrib.auth.models import User
+from django.core import mail
+from django.test import Client, TestCase, override_settings
 
 
 class GiftListApiTests(TestCase):
@@ -48,3 +51,34 @@ class GiftListApiTests(TestCase):
         )
         self.assertEqual(assignment_response.status_code, 200)
         self.assertEqual(self.client.get("/api/lists/").json()["lists"][0]["gifts"][0]["giver_id"], giver_response.json()["giver"]["id"])
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        FRONTEND_URL="https://giftlist.example.com",
+    )
+    def test_password_reset_sends_a_link_and_accepts_a_new_password(self):
+        user = User.objects.create_user("owner", "owner@example.com", "old-password")
+        response = self.post("/api/auth/password-reset/", {"email": user.email})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("https://giftlist.example.com/?reset_uid=", mail.outbox[0].body)
+
+        reset_url = next(line for line in mail.outbox[0].body.splitlines() if line.startswith("https://"))
+        params = parse_qs(urlparse(reset_url).query)
+        confirm = self.post(
+            "/api/auth/password-reset/confirm/",
+            {
+                "uid": params["reset_uid"][0],
+                "token": params["reset_token"][0],
+                "password": "new-safe-password",
+            },
+        )
+        self.assertEqual(confirm.status_code, 200)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password("new-safe-password"))
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_password_reset_does_not_disclose_unknown_email_addresses(self):
+        response = self.post("/api/auth/password-reset/", {"email": "nobody@example.com"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)

@@ -31,10 +31,32 @@ def env_list(name, default=""):
     return [value.strip() for value in os.getenv(name, default).split(",") if value.strip()]
 
 
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,backend")
 CSRF_TRUSTED_ORIGINS = env_list(
     "CSRF_TRUSTED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
 )
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+
+if DEBUG:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+else:
+    ses_region = os.getenv("AWS_SES_REGION")
+    ses_username = os.getenv("AWS_SES_SMTP_USERNAME")
+    ses_password = os.getenv("AWS_SES_SMTP_PASSWORD")
+    if not all((ses_region, ses_username, ses_password)):
+        raise RuntimeError(
+            "AWS_SES_REGION, AWS_SES_SMTP_USERNAME, and AWS_SES_SMTP_PASSWORD "
+            "must be set when DJANGO_DEBUG is false."
+        )
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = f"email-smtp.{ses_region}.amazonaws.com"
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+    EMAIL_HOST_USER = ses_username
+    EMAIL_HOST_PASSWORD = ses_password
+    EMAIL_TIMEOUT = 10
+
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@gogogiftlist.local")
 
 
 # Application definition

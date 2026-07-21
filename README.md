@@ -79,7 +79,11 @@ only on `127.0.0.1`, so they are never exposed directly to the internet.
 
 5. Create the production environment file and set real values. `DJANGO_SECRET_KEY`
    and `DB_PASSWORD` must be long random secrets; URL-encode the password in
-   `DATABASE_URL` if it contains reserved URL characters.
+   `DATABASE_URL` if it contains reserved URL characters. To enable password-reset
+   emails, also create Amazon SES SMTP credentials in the chosen SES region, verify
+   the `DEFAULT_FROM_EMAIL` identity, and put the region, SMTP username, and SMTP
+   password in `.env.production`. SES starts in a sandbox in new accounts, so request
+   production access before sending to unverified recipient addresses.
 
    ```bash
    cp .env.production.example .env.production
