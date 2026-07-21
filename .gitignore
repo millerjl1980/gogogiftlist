@@ -264,3 +264,4 @@ backend/.venv/
 Thumbs.db
 .idea/
 .vscode/
+.env.production.example
