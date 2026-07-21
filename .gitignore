@@ -105,8 +105,8 @@ ipython_config.py
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
 #   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-# poetry.lock
-# poetry.toml
+poetry.lock
+poetry.toml
 
 # pdm
 #   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
@@ -149,6 +149,8 @@ activemq-data/
 
 # Environments
 .env
+.env.*
+!.env.production.example
 .envrc
 .venv
 env/
@@ -216,3 +218,50 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# =========================================================================
+# 🐳 Docker & Multi-Service Structural Overrides
+# =========================================================================
+# Crucial: Protects your live PostgreSQL database storage from going to Git
+data/db/
+postgres_data/
+backend/staticfiles/
+
+# Adjusting environment rules for subfolders
+backend/.env
+frontend/.env
+.env.*
+!.env.production.example
+
+# =========================================================================
+# ⚡ Bun & React (Frontend)
+# =========================================================================
+# Node modules folder managed by Bun
+frontend/node_modules/
+frontend/dist/
+node_modules/
+
+# Vite / Bun build outputs (compiled static production code)
+frontend/dist/
+frontend/build/
+
+# Bun local logs and lockfile caches
+.bun/
+bun-debug.log*
+
+# =========================================================================
+# 🐍 Poetry Overrides for Justin's Backend Setup
+# =========================================================================
+# Ensures the localized virtual environments inside your container volumes 
+# don't get pulled back onto your host machine's Git tracking.
+backend/.venv/
+.venv/
+
+# =========================================================================
+# 💻 General OS & IDE Cleanup
+# =========================================================================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.env.production.example

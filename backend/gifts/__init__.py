@@ -1,0 +1,1 @@
+"""Gift-list domain application."""

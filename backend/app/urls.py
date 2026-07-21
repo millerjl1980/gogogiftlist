@@ -1,0 +1,38 @@
+"""
+URL configuration for app project.
+
+The `urlpatterns` list routes URLs to views. For more information please see:
+    https://docs.djangoproject.com/en/6.0/topics/http/urls/
+Examples:
+Function views
+    1. Add an import:  from my_app import views
+    2. Add a URL to urlpatterns:  path('', views.home, name='home')
+Class-based views
+    1. Add an import:  from other_app.views import Home
+    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
+Including another URLconf
+    1. Import the include() function: from django.urls import include, path
+    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+"""
+
+from django.contrib import admin
+from django.urls import path
+
+from gifts import views
+
+urlpatterns = [
+    path("healthz", views.healthz),
+    path("admin/", admin.site.urls),
+    path("api/csrf/", views.csrf),
+    path("api/auth/register/", views.register),
+    path("api/auth/login/", views.login_view),
+    path("api/auth/logout/", views.logout_view),
+    path("api/auth/password-reset/", views.password_reset),
+    path("api/auth/password-reset/confirm/", views.password_reset_confirm),
+    path("api/me/", views.me),
+    path("api/lists/", views.lists),
+    path("api/lists/<int:list_id>/gifts/", views.gifts),
+    path("api/givers/", views.givers),
+    path("api/gifts/<int:gift_id>/assignment/", views.assignment),
+    path("api/giver/assignments/", views.giver_assignments),
+]
