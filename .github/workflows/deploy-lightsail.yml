@@ -60,6 +60,8 @@ jobs:
             "DEPLOY_PATH=$(printf '%q' "$LIGHTSAIL_DEPLOY_PATH") bash -s" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_PATH"
+          
+          export BUILDKIT_PARALLEL_LIMIT=1
 
           flock /tmp/gogogiftlist-deploy.lock \
             docker compose --env-file .env.production -f docker-compose.production.yml up --build --remove-orphans -d
