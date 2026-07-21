@@ -55,20 +55,19 @@ docker compose run --rm --no-deps backend poetry run python manage.py test gifts
 docker compose run --rm --no-deps frontend bun run build
 ```
 
-## Deploy to an IPv6-only AWS Lightsail instance
+## Deploy to a dual-stack Ubuntu AWS Lightsail instance
 
 Production uses `docker-compose.production.yml`: PostgreSQL is available only to the
 backend container, Gunicorn serves Django, and a host-installed Caddy service serves
 as the public HTTPS reverse proxy. The React container and Django container listen
 only on `127.0.0.1`, so they are never exposed directly to the internet.
 
-1. Create an Amazon Linux 2023 IPv6-only instance. In the *IPv6* firewall, allow TCP
-   ports 22, 80, and 443. Ensure your own connection and your intended users can
-   reach IPv6-only sites.
-2. Point the production domain's DNS `AAAA` record to the instance's public IPv6
-   address before starting Caddy. An IPv6 address survives a restart, but Lightsail
-   does not provide a transferable static IPv6 address; update the record if you
-   replace the instance or disable/re-enable IPv6.
+1. Create an Ubuntu 22.04 dual-stack instance and attach a Lightsail static IPv4
+   address. In both the *IPv4* and *IPv6* firewalls, allow TCP ports 22, 80, and 443.
+2. Point the production domain's DNS `A` record to the static IPv4 address and its
+   `AAAA` record to the public IPv6 address before starting Caddy. The IPv6 address
+   survives a restart but is not transferable; update the `AAAA` record if you replace
+   the instance or disable/re-enable IPv6.
 3. Install Docker Engine, the Docker Compose plugin, and Caddy on the instance, then
    clone this repository there. Install Caddy as a systemd service.
 4. Update the committed dependency lock after pulling these changes (this requires
@@ -138,11 +137,9 @@ SSH and `rsync`; it does not give the Lightsail server access to GitHub. It pres
 the server's `.env.production` and PostgreSQL Docker volume, uploads the checked-out
 revision, then runs the production Compose command and checks `/healthz`.
 
-The GitHub runner must be able to reach the instance over the address family used for
-SSH. For the IPv6-only instance described above, first run the workflow manually after
-configuration. If a GitHub-hosted runner cannot reach its IPv6 address, use a
-self-hosted runner with IPv6 connectivity (outside the app instance) or give the
-deployment target a reachable IPv4 address; do not weaken SSH host-key verification.
+Use the instance's static public IPv4 address for the GitHub Actions SSH connection.
+This avoids any GitHub-runner IPv6 reachability dependency; keep the `AAAA` DNS record
+so visitors can still use IPv6.
 
 ### 1. Prepare the Lightsail instance
 
@@ -150,9 +147,19 @@ Complete the production setup above first, including Docker, Docker Compose, Cad
 DNS, and a working `.env.production`. Then, as the account that will run deployments:
 
 ```bash
-sudo dnf install -y rsync
+sudo apt-get update
+sudo apt-get install -y rsync
 sudo mkdir -p /srv/gogogiftlist
 sudo chown "$USER":"$USER" /srv/gogogiftlist
+```
+
+For Ubuntu Lightsail instances, the usual deployment user is `ubuntu`. Confirm that
+user can run Docker without `sudo` (the workflow invokes `docker compose` directly):
+
+```bash
+sudo usermod -aG docker "$USER"
+newgrp docker
+docker version
 ```
 
 Copy the repository to `/srv/gogogiftlist` once (or clone it), create
@@ -174,7 +181,7 @@ Record the server's SSH host key from a trusted connection. Do this from the Lig
 console or an already verified SSH session—not from an unverified network lookup:
 
 ```bash
-ssh-keyscan -t ed25519 -p 22 your-server-ipv6-address
+ssh-keyscan -t ed25519 -p 22 your-static-public-ipv4-address
 ```
 
 Save the exact line that command prints. Ensure the Lightsail firewall permits SSH
@@ -195,8 +202,8 @@ Add these repository variables in the same screen:
 
 | Variable | Value |
 | --- | --- |
-| `LIGHTSAIL_HOST` | The Lightsail public IPv6 address (or a DNS hostname with an AAAA record) |
-| `LIGHTSAIL_USER` | The Linux user that owns `/srv/gogogiftlist` and can run Docker (often `ec2-user`) |
+| `LIGHTSAIL_HOST` | The Lightsail static public IPv4 address (or DNS hostname with an `A` record) |
+| `LIGHTSAIL_USER` | The Linux user that owns `/srv/gogogiftlist` and can run Docker (normally `ubuntu`) |
 | `LIGHTSAIL_SSH_PORT` | `22` (optional; the workflow defaults to this) |
 | `LIGHTSAIL_DEPLOY_PATH` | `/srv/gogogiftlist` (optional; this is the workflow default) |
 
