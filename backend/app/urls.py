@@ -21,6 +21,7 @@ from django.urls import path
 from gifts import views
 
 urlpatterns = [
+    path("healthz", views.healthz),
     path("admin/", admin.site.urls),
     path("api/csrf/", views.csrf),
     path("api/auth/register/", views.register),

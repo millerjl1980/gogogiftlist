@@ -1,0 +1,23 @@
+{$DOMAIN} {
+    encode zstd gzip
+
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    handle /admin/* {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    handle /static/* {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    handle /healthz {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:3000
+    }
+}

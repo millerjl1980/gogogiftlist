@@ -16,6 +16,11 @@ class GiftListApiTests(TestCase):
             HTTP_X_CSRFTOKEN=self.client.cookies["csrftoken"].value,
         )
 
+    def test_health_check_is_public(self):
+        response = self.client.get("/healthz")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
+
     def test_owner_can_create_and_assign_a_gift(self):
         self.assertEqual(
             self.post(

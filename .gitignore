@@ -149,6 +149,8 @@ activemq-data/
 
 # Environments
 .env
+.env.*
+!.env.production.example
 .envrc
 .venv
 env/
@@ -223,17 +225,20 @@ __marimo__/
 # Crucial: Protects your live PostgreSQL database storage from going to Git
 data/db/
 postgres_data/
+backend/staticfiles/
 
 # Adjusting environment rules for subfolders
 backend/.env
 frontend/.env
 .env.*
+!.env.production.example
 
 # =========================================================================
 # ⚡ Bun & React (Frontend)
 # =========================================================================
 # Node modules folder managed by Bun
 frontend/node_modules/
+frontend/dist/
 node_modules/
 
 # Vite / Bun build outputs (compiled static production code)
@@ -259,3 +264,4 @@ backend/.venv/
 Thumbs.db
 .idea/
 .vscode/
+.env.production.example

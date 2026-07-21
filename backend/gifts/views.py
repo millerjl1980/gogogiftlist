@@ -23,6 +23,11 @@ def error(message, status=400):
     return JsonResponse({"detail": message}, status=status)
 
 
+@require_GET
+def healthz(request):
+    return JsonResponse({"status": "ok"})
+
+
 def api_login_required(view):
     @wraps(view)
     def wrapped(request, *args, **kwargs):

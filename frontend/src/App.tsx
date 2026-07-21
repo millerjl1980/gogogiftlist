@@ -6,7 +6,7 @@ type Giver = { id: number; name: string; email: string }
 type Gift = { id: number; name: string; detail: string; url?: string; giverId?: number }
 type GiftList = { id: number; receiver: string; occasion: string; date: string; gifts: Gift[] }
 
-const API_URL = 'http://localhost:8000/api'
+const API_URL = '/api'
 let csrfToken = ''
 
 async function refreshCsrfToken() {

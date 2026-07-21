@@ -55,6 +55,84 @@ docker compose run --rm --no-deps backend poetry run python manage.py test gifts
 docker compose run --rm --no-deps frontend bun run build
 ```
 
+## Deploy to an IPv6-only AWS Lightsail instance
+
+Production uses `docker-compose.production.yml`: PostgreSQL is available only to the
+backend container, Gunicorn serves Django, and a host-installed Caddy service serves
+as the public HTTPS reverse proxy. The React container and Django container listen
+only on `127.0.0.1`, so they are never exposed directly to the internet.
+
+1. Create an Amazon Linux 2023 IPv6-only instance. In the *IPv6* firewall, allow TCP
+   ports 22, 80, and 443. Ensure your own connection and your intended users can
+   reach IPv6-only sites.
+2. Point the production domain's DNS `AAAA` record to the instance's public IPv6
+   address before starting Caddy. An IPv6 address survives a restart, but Lightsail
+   does not provide a transferable static IPv6 address; update the record if you
+   replace the instance or disable/re-enable IPv6.
+3. Install Docker Engine, the Docker Compose plugin, and Caddy on the instance, then
+   clone this repository there. Install Caddy as a systemd service.
+4. Update the committed dependency lock after pulling these changes (this requires
+   Docker access and internet access to PyPI):
+
+   ```bash
+   docker compose run --rm --no-deps backend poetry lock
+   ```
+
+5. Create the production environment file and set real values. `DJANGO_SECRET_KEY`
+   and `DB_PASSWORD` must be long random secrets; URL-encode the password in
+   `DATABASE_URL` if it contains reserved URL characters.
+
+   ```bash
+   cp .env.production.example .env.production
+   chmod 600 .env.production
+   ```
+
+6. Install the Caddy configuration and provide its domain environment variable:
+
+   ```bash
+   sudo install -m 644 deploy/Caddyfile /etc/caddy/Caddyfile
+   echo "DOMAIN=your-domain.example" | sudo tee /etc/caddy/.env
+   sudo systemctl edit caddy
+   ```
+
+   In the systemd editor, add the following and then enable/restart Caddy:
+
+   ```ini
+   [Service]
+   EnvironmentFile=/etc/caddy/.env
+   ```
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now caddy
+   ```
+
+7. Build and start the private application services:
+
+   ```bash
+   docker compose --env-file .env.production -f docker-compose.production.yml up --build -d
+   ```
+
+8. Confirm the public health check and inspect startup logs:
+
+   ```bash
+   curl -fsS https://your-domain.example/healthz
+   docker compose --env-file .env.production -f docker-compose.production.yml logs -f
+   ```
+
+The 512 MB bundle can run this low-traffic configuration, but it leaves little memory
+headroom for Docker image builds, PostgreSQL, and application traffic. Configure at
+least 1 GB of swap before the first build and monitor memory use; move to the 1 GB
+bundle if the instance swaps regularly or is OOM-killed. The production Gunicorn and
+PostgreSQL settings are intentionally conservative for this size.
+
+The database is kept in the `postgres_data` Docker volume. Take regular Lightsail
+snapshots and logical PostgreSQL backups before upgrades. Never expose PostgreSQL
+port 5432 publicly or commit `.env.production`.
+
+For deployment updates, pull the desired revision and repeat the `up --build -d`
+command. Run this command from the instance so its `.env.production` values are used.
+
 ## Project structure
 
 ```text
