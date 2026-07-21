@@ -9,7 +9,16 @@ type GiftList = { id: number; receiver: string; occasion: string; date: string; 
 const API_URL = 'http://localhost:8000/api'
 let csrfToken = ''
 
+async function refreshCsrfToken() {
+  const response = await fetch(`${API_URL}/csrf/`, { credentials: 'include' })
+  const data = await response.json()
+  csrfToken = data.csrfToken
+}
+
 async function api(path: string, method = 'GET', data?: object) {
+  if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method.toUpperCase()) && !csrfToken) {
+    await refreshCsrfToken()
+  }
   const response = await fetch(`${API_URL}${path}`, {
     method,
     credentials: 'include',
@@ -47,7 +56,7 @@ function App() {
   }
 
   useEffect(() => {
-    fetch(`${API_URL}/csrf/`, { credentials: 'include' }).then((response) => response.json()).then((data) => { csrfToken = data.csrfToken; return api('/me/') }).then(() => { setSignedIn(true); return loadWorkspace() }).catch(() => undefined)
+    refreshCsrfToken().then(() => api('/me/')).then(() => { setSignedIn(true); return loadWorkspace() }).catch(() => undefined)
   }, [])
 
   const addList = async (event: FormEvent<HTMLFormElement>) => {
@@ -88,6 +97,8 @@ function App() {
   const authenticateUser = async (name: string, email: string, password: string) => {
     try {
       await api(signUp ? '/auth/register/' : '/auth/login/', 'POST', signUp ? { username: name, email, password } : { email, password })
+      // Django rotates the CSRF cookie during login, so use its new matching token.
+      await refreshCsrfToken()
       setSignedIn(true); await loadWorkspace()
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to sign in.') }
   }

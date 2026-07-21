@@ -22,19 +22,19 @@ Built for [OpenAI Build Week](https://openai.devpost.com/) · [Devpost project](
 - Gift-giver management and one-giver-per-gift assignment
 - Clipboard-ready and email-ready per-giver shopping lists
 - A giver portal for account-linked assignments
-- Django-backed persistence with SQLite for local development
+- Django-backed persistence with PostgreSQL in Docker Compose (SQLite fallback outside Docker)
 
 ## Tech stack
 
 - React and TypeScript with Vite
 - Django 6 and Django's built-in authentication
-- SQLite locally; PostgreSQL is included in Docker Compose for future deployment use
+- PostgreSQL in Docker Compose, with SQLite as the default outside Docker
 - Bun and Poetry
 - Docker Compose
 
 ## Run locally
 
-Copy the environment variables required by `docker-compose.yml` (database values are only needed by the included PostgreSQL service), then build and start the application:
+Copy the environment variables required by `docker-compose.yml`, then build and start the application. The backend applies pending database migrations automatically during startup:
 
 ```bash
 docker compose up --build
