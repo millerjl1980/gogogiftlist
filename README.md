@@ -130,8 +130,85 @@ The database is kept in the `postgres_data` Docker volume. Take regular Lightsai
 snapshots and logical PostgreSQL backups before upgrades. Never expose PostgreSQL
 port 5432 publicly or commit `.env.production`.
 
-For deployment updates, pull the desired revision and repeat the `up --build -d`
-command. Run this command from the instance so its `.env.production` values are used.
+## Automatic deployments from GitHub
+
+The repository includes [`.github/workflows/deploy-lightsail.yml`](.github/workflows/deploy-lightsail.yml),
+which deploys every push to `main` (and can also be run manually). The workflow uses
+SSH and `rsync`; it does not give the Lightsail server access to GitHub. It preserves
+the server's `.env.production` and PostgreSQL Docker volume, uploads the checked-out
+revision, then runs the production Compose command and checks `/healthz`.
+
+The GitHub runner must be able to reach the instance over the address family used for
+SSH. For the IPv6-only instance described above, first run the workflow manually after
+configuration. If a GitHub-hosted runner cannot reach its IPv6 address, use a
+self-hosted runner with IPv6 connectivity (outside the app instance) or give the
+deployment target a reachable IPv4 address; do not weaken SSH host-key verification.
+
+### 1. Prepare the Lightsail instance
+
+Complete the production setup above first, including Docker, Docker Compose, Caddy,
+DNS, and a working `.env.production`. Then, as the account that will run deployments:
+
+```bash
+sudo dnf install -y rsync
+sudo mkdir -p /srv/gogogiftlist
+sudo chown "$USER":"$USER" /srv/gogogiftlist
+```
+
+Copy the repository to `/srv/gogogiftlist` once (or clone it), create
+`/srv/gogogiftlist/.env.production` as in step 5 above, and run the initial production
+deployment from that directory. This initial copy is necessary because the GitHub
+workflow deliberately never transfers production secrets.
+
+Create a dedicated SSH key for GitHub Actions, append its public half to the deploying
+user's `~/.ssh/authorized_keys`, and keep the private half only for GitHub:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/gogogiftlist-github-actions -C gogogiftlist-github-actions
+cat ~/.ssh/gogogiftlist-github-actions.pub >> ~/.ssh/authorized_keys
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/authorized_keys
+```
+
+Record the server's SSH host key from a trusted connection. Do this from the Lightsail
+console or an already verified SSH session—not from an unverified network lookup:
+
+```bash
+ssh-keyscan -t ed25519 -p 22 your-server-ipv6-address
+```
+
+Save the exact line that command prints. Ensure the Lightsail firewall permits SSH
+from GitHub Actions (port 22); if you restrict SSH by source IP, use GitHub's published
+Actions runner IP ranges and keep them updated. The existing IPv6 firewall rules for
+80 and 443 remain required for the app.
+
+### 2. Configure the GitHub repository
+
+In **Settings → Secrets and variables → Actions**, add these repository secrets:
+
+| Secret | Value |
+| --- | --- |
+| `LIGHTSAIL_SSH_PRIVATE_KEY` | Entire contents of `~/.ssh/gogogiftlist-github-actions` (the private key) |
+| `LIGHTSAIL_SSH_KNOWN_HOSTS` | The verified `known_hosts` line recorded above |
+
+Add these repository variables in the same screen:
+
+| Variable | Value |
+| --- | --- |
+| `LIGHTSAIL_HOST` | The Lightsail public IPv6 address (or a DNS hostname with an AAAA record) |
+| `LIGHTSAIL_USER` | The Linux user that owns `/srv/gogogiftlist` and can run Docker (often `ec2-user`) |
+| `LIGHTSAIL_SSH_PORT` | `22` (optional; the workflow defaults to this) |
+| `LIGHTSAIL_DEPLOY_PATH` | `/srv/gogogiftlist` (optional; this is the workflow default) |
+
+Commit these files and merge or push them to `main`. The Actions tab will show the
+first deployment; use **Run workflow** there to deploy manually. A successful run
+ends by querying the app's `/healthz` endpoint through the backend container. If a
+deployment fails, inspect the workflow log first, then on the instance run:
+
+```bash
+cd /srv/gogogiftlist
+docker compose --env-file .env.production -f docker-compose.production.yml logs --tail=200
+```
 
 ## Project structure
 

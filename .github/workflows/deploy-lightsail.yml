@@ -1,0 +1,70 @@
+name: Deploy to AWS Lightsail
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Queue deployments instead of interrupting an in-progress Docker build.
+concurrency:
+  group: lightsail-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      LIGHTSAIL_HOST: ${{ vars.LIGHTSAIL_HOST }}
+      LIGHTSAIL_USER: ${{ vars.LIGHTSAIL_USER }}
+      LIGHTSAIL_PORT: ${{ vars.LIGHTSAIL_SSH_PORT || '22' }}
+      LIGHTSAIL_DEPLOY_PATH: ${{ vars.LIGHTSAIL_DEPLOY_PATH || '/srv/gogogiftlist' }}
+
+    steps:
+      - name: Check out the revision to deploy
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Sync application source to Lightsail
+        run: |
+          case "$LIGHTSAIL_HOST" in
+            *:*) RSYNC_HOST="[$LIGHTSAIL_HOST]" ;;
+            *) RSYNC_HOST="$LIGHTSAIL_HOST" ;;
+          esac
+          rsync --archive --compress --delete \
+            --exclude='.git/' \
+            --exclude='.env' \
+            --exclude='.env.production' \
+            --exclude='data/' \
+            --exclude='backend/.venv/' \
+            --exclude='frontend/node_modules/' \
+            --exclude='**/__pycache__/' \
+            -e "ssh -i ~/.ssh/id_ed25519 -p $LIGHTSAIL_PORT -o StrictHostKeyChecking=yes" \
+            ./ "$LIGHTSAIL_USER@$RSYNC_HOST:$LIGHTSAIL_DEPLOY_PATH/"
+
+      - name: Rebuild services and verify the deployment
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -p "$LIGHTSAIL_PORT" -o StrictHostKeyChecking=yes \
+            -l "$LIGHTSAIL_USER" "$LIGHTSAIL_HOST" \
+            "DEPLOY_PATH=$(printf '%q' "$LIGHTSAIL_DEPLOY_PATH") bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+
+          flock /tmp/gogogiftlist-deploy.lock \
+            docker compose --env-file .env.production -f docker-compose.production.yml up --build --remove-orphans -d
+
+          docker compose --env-file .env.production -f docker-compose.production.yml exec -T backend \
+            sh -c 'curl --fail --silent --show-error --retry 10 --retry-connrefused \
+              -H "Host: $DOMAIN" http://127.0.0.1:8000/healthz'
+          REMOTE
