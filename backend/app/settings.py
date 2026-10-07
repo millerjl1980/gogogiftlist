@@ -35,6 +35,17 @@ ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,backend")
 CSRF_TRUSTED_ORIGINS = env_list(
     "CSRF_TRUSTED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
 )
+
+# Automatically add the production domain if provided in the environment
+production_domain = os.getenv("DOMAIN")
+if production_domain:
+    if production_domain not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(production_domain)
+    
+    csrf_origin = f"https://{production_domain}"
+    if csrf_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(csrf_origin)
+
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
 
 if DEBUG:

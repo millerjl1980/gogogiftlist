@@ -265,3 +265,4 @@ Thumbs.db
 .idea/
 .vscode/
 .env.production.example
+.continue/
